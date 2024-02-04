@@ -317,7 +317,6 @@ void FingerprintGrowComponent::aura_led_control(uint8_t state, uint8_t speed, ui
       ESP_LOGD(TAG, "Aura LED set");
       this->last_aura_led_control_ = millis();
       this->last_aura_led_duration_ = 10 * speed * count;
-      this->flush();
     case PACKET_RCV_ERR:
     case TIMEOUT:
       break;
