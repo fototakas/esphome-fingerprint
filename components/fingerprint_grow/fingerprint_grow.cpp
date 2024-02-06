@@ -19,29 +19,25 @@ void FingerprintGrowComponent::update() {
     if (this->sensing_pin_->digital_read()) {
       ESP_LOGV(TAG, "No touch sensing");
       this->waiting_removal_ = false;
-      this->finger_scaned_ = false;
       return;
     }
   }
 
-  if (this->finger_scaned_ == false) {
-      if (this->waiting_removal_) {
-        if (this->scan_image_(1) == NO_FINGER) {
-          ESP_LOGD(TAG, "Finger removed");
-          this->waiting_removal_ = false;
-          this->finger_scaned_ = false;
-        }
-      return;
-    }
+  if (this->waiting_removal_ == false) {
+
     if (this->enrollment_image_ == 0) {
       this->scan_and_match_();
+      if (this->sensing_pin_ != nullptr) {
+        this->waiting_removal_ = true;
+      }
       return;
     }
+
     uint8_t result = this->scan_image_(this->enrollment_image_);
     if (result == NO_FINGER) {
       return;
     }
-  this->waiting_removal_ = true;
+    
   if (result != OK) {
     this->finish_enrollment(result);
     return;
@@ -100,12 +96,10 @@ void FingerprintGrowComponent::scan_and_match_() {
     ESP_LOGV(TAG, "Scan and match");
   }
   if (this->scan_image_(1) == OK) {
-    this->waiting_removal_ = true;
     this->data_ = {SEARCH, 0x01, 0x00, 0x00, (uint8_t) (this->capacity_ >> 8), (uint8_t) (this->capacity_ & 0xFF)};
     switch (this->send_command_()) {
       case OK: {
         ESP_LOGD(TAG, "Fingerprint matched");
-        this->finger_scaned_ = true;
         uint16_t finger_id = ((uint16_t) this->data_[1] << 8) | this->data_[2];
         uint16_t confidence = ((uint16_t) this->data_[3] << 8) | this->data_[4];
         if (this->last_finger_id_sensor_ != nullptr) {
@@ -119,7 +113,6 @@ void FingerprintGrowComponent::scan_and_match_() {
       }
       case NOT_FOUND:
         ESP_LOGD(TAG, "Fingerprint not matched to any saved slots");
-        this->finger_scaned_ = true;
         this->finger_scan_unmatched_callback_.call();
         break;
     }
@@ -137,6 +130,7 @@ uint8_t FingerprintGrowComponent::scan_image_(uint8_t buffer) {
     case OK:
       break;
     case NO_FINGER:
+      this->waiting_removal_ = false;
       if (this->sensing_pin_ != nullptr) {
         ESP_LOGD(TAG, "No finger");
       } else {
@@ -317,7 +311,6 @@ void FingerprintGrowComponent::aura_led_control(uint8_t state, uint8_t speed, ui
       ESP_LOGD(TAG, "Aura LED set");
       this->last_aura_led_control_ = millis();
       this->last_aura_led_duration_ = 10 * speed * count;
-      this->flush();
     case PACKET_RCV_ERR:
     case TIMEOUT:
       break;
@@ -328,6 +321,7 @@ void FingerprintGrowComponent::aura_led_control(uint8_t state, uint8_t speed, ui
 }
 
 uint8_t FingerprintGrowComponent::send_command_() {
+  
   this->write((uint8_t) (START_CODE >> 8));
   this->write((uint8_t) (START_CODE & 0xFF));
   this->write(this->address_[0]);
@@ -343,6 +337,7 @@ uint8_t FingerprintGrowComponent::send_command_() {
   uint16_t sum = ((wire_length) >> 8) + ((wire_length) &0xFF) + COMMAND;
   for (auto data : this->data_) {
     this->write(data);
+   
     sum += data;
   }
 
@@ -350,9 +345,10 @@ uint8_t FingerprintGrowComponent::send_command_() {
   this->write((uint8_t) (sum & 0xFF));
 
   this->data_.clear();
-
   uint8_t byte;
   uint16_t idx = 0, length = 0;
+
+while (this->available()) this->read(); //clear read buffer
 
   for (uint16_t timer = 0; timer < 1000; timer++) {
     if (this->available() == 0) {

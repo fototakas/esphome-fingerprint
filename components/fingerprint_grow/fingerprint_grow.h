@@ -163,7 +163,6 @@ class FingerprintGrowComponent : public PollingComponent, public uart::UARTDevic
   uint16_t enrollment_slot_ = ENROLLMENT_SLOT_UNUSED;
   uint8_t enrollment_buffers_ = 5;
   bool waiting_removal_ = false;
-  bool finger_scaned_ = false;
   uint32_t last_aura_led_control_ = 0;
   uint16_t last_aura_led_duration_ = 0;
   sensor::Sensor *fingerprint_count_sensor_{nullptr};
